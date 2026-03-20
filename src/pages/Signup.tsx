@@ -30,10 +30,7 @@ const Signup = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
-    const [referralValidation, setReferralValidation] = useState<{
-        isValid: boolean;
-        message: string;
-    }>({ isValid: false, message: "" });
+    const [referralValidation, setReferralValidation] = useState<{ isValid: boolean; message: string }>({ isValid: false, message: "" });
     const navigate = useNavigate();
     const { toast } = useToast();
 
@@ -54,69 +51,41 @@ const Signup = () => {
         }
     ];
 
-    // Validate referral code when it changes
     useEffect(() => {
         const validateReferral = async () => {
             if (formData.referralCode.trim()) {
                 try {
                     const validation = await validateReferralCode(formData.referralCode);
-                    if (validation.isValid) {
-                        setReferralValidation({
-                            isValid: true,
-                            message: "Valid referral code! You'll both earn 10 coins."
-                        });
-                    } else {
-                        setReferralValidation({
-                            isValid: false,
-                            message: "Invalid referral code."
-                        });
-                    }
-                } catch (error) {
                     setReferralValidation({
-                        isValid: false,
-                        message: "Could not validate referral code."
+                        isValid: validation.isValid,
+                        message: validation.isValid
+                            ? "Valid referral code! You'll both earn 10 coins."
+                            : "Invalid referral code."
                     });
+                } catch {
+                    setReferralValidation({ isValid: false, message: "Could not validate referral code." });
                 }
             } else {
                 setReferralValidation({ isValid: false, message: "" });
             }
         };
-
-        const debounceTimer = setTimeout(validateReferral, 500);
-        return () => clearTimeout(debounceTimer);
+        const timer = setTimeout(validateReferral, 500);
+        return () => clearTimeout(timer);
     }, [formData.referralCode]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
 
-        if (formData.password !== formData.confirmPassword) {
-            setError("Passwords do not match");
-            return;
-        }
-
-        if (formData.password.length < 8) {
-            setError("Password must be at least 8 characters long");
-            return;
-        }
-
-        if (!formData.role) {
-            setError("Please select a role");
-            return;
-        }
-
-        if (!formData.agreeToTerms) {
-            setError("Please agree to the terms and conditions");
-            return;
-        }
-
+        if (formData.password !== formData.confirmPassword) { setError("Passwords do not match"); return; }
+        if (formData.password.length < 8) { setError("Password must be at least 8 characters long"); return; }
+        if (!formData.role) { setError("Please select a role"); return; }
+        if (!formData.agreeToTerms) { setError("Please agree to the terms and conditions"); return; }
         if (formData.role === "municipal-employee" && !formData.employeeId) {
-            setError("Employee ID is required for municipal employees");
-            return;
+            setError("Employee ID is required for municipal employees"); return;
         }
 
         setIsLoading(true);
-
         try {
             const userData = {
                 displayName: `${formData.firstName} ${formData.lastName}`,
@@ -129,46 +98,21 @@ const Signup = () => {
                 })
             };
 
-            const { user, error: authError } = await signUpWithEmail(
-                formData.email,
-                formData.password,
-                userData
-            );
-
-            if (authError) {
-                setError(authError);
-                return;
-            }
+            const { user, error: authError } = await signUpWithEmail(formData.email, formData.password, userData);
+            if (authError) { setError(authError); return; }
 
             if (user) {
                 if (formData.referralCode.trim()) {
-                    const referralProcessed = await processReferralSignup(user.uid, formData.referralCode);
-                    if (referralProcessed) {
-                        toast({
-                            title: "Welcome to Swachh Buddy!",
-                            description: "Account created! Referral bonus will be awarded after your first QR scan.",
-                        });
-                    } else {
-                        toast({
-                            title: "Welcome to Swachh Buddy!",
-                            description: "Account created successfully.",
-                        });
-                    }
-                } else {
-                    toast({
-                        title: "Welcome to Swachh Buddy!",
-                        description: "Your account has been created successfully.",
-                    });
+                    await processReferralSignup(user.uid, formData.referralCode);
                 }
-
-                // Route based on role
-                     if (formData.role === "municipal-employee") {
-                           navigate('/dashboard/enduser');
+                toast({ title: "Welcome to Swachh Buddy! 🎉", description: "Your account has been created successfully." });
+                if (formData.role === "municipal-employee") {
+                    navigate('/dashboard/enduser');
                 } else {
-                  navigate('/dashboard/corporate');
+                    navigate('/dashboard/corporate');
                 }
             }
-        } catch (err) {
+        } catch {
             setError("Something went wrong. Please try again.");
         } finally {
             setIsLoading(false);
@@ -179,21 +123,13 @@ const Signup = () => {
         try {
             setIsLoading(true);
             const { user, error } = await signInWithGoogle();
-
-            if (error) {
-                setError(error);
-                return;
-            }
-
+            if (error) { setError(error); return; }
             if (user) {
-                toast({
-                    title: "Welcome to Swachh Buddy!",
-                    description: "Your account has been created successfully with Google.",
-                });
+                toast({ title: "Welcome to Swachh Buddy! 🎉", description: "Account created with Google." });
                 navigate('/dashboard/corporate');
             }
-        } catch (err) {
-            setError("Failed to sign up with Google. Please try again.");
+        } catch {
+            setError("Failed to sign up with Google.");
         } finally {
             setIsLoading(false);
         }
@@ -201,50 +137,45 @@ const Signup = () => {
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
-
-    const handleRoleChange = (value: string) => {
-        setFormData(prev => ({
-            ...prev,
-            role: value
-        }));
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
-            <div className="container mx-auto px-4 py-16">
+        // FIXED: dark mode background + explicit text colors throughout
+        <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-950">
+            <div className="container mx-auto px-4 py-12 md:py-16">
                 <div className="max-w-2xl mx-auto">
 
-                    {/* Header */}
+                    {/* Header — FIXED: always visible in both themes */}
                     <div className="text-center mb-8">
-                        <div className="mx-auto w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center mb-4">
+                        <div className="mx-auto w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center mb-4 shadow-lg">
                             <Recycle className="h-8 w-8 text-white" />
                         </div>
-                        <h1 className="text-3xl font-bold text-foreground mb-2">Join Swachh Buddy</h1>
-                        <p className="text-muted-foreground">
+                        {/* FIXED: explicit colors instead of text-foreground */}
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                            Join Swachh Buddy
+                        </h1>
+                        <p className="text-gray-600 dark:text-gray-300">
                             Create your account and start contributing to a cleaner India
                         </p>
                     </div>
 
-                    {/* Signup Form */}
-                    <Card className="shadow-xl border-0">
+                    {/* Signup Card — FIXED: explicit background */}
+                    <Card className="shadow-xl border-0 bg-white dark:bg-gray-900">
                         <CardHeader className="space-y-1">
-                            <CardTitle className="text-2xl text-center text-foreground">Create Account</CardTitle>
-                            <CardDescription className="text-center">
+                            <CardTitle className="text-2xl text-center text-gray-900 dark:text-white">
+                                Create Account
+                            </CardTitle>
+                            <CardDescription className="text-center text-gray-500 dark:text-gray-400">
                                 Choose your role and fill in your details
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {/* Referral Welcome Message */}
                             {searchParams.get('ref') && (
-                                <Alert className="mb-6 bg-green-50 border-green-200">
+                                <Alert className="mb-6 bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
                                     <Gift className="h-4 w-4 text-green-600" />
-                                    <AlertDescription className="text-green-800">
-                                        🎉 You've been referred by a friend! Complete your signup and both of you will earn 10 coins.
+                                    <AlertDescription className="text-green-800 dark:text-green-300">
+                                        🎉 You've been referred! Complete signup and both of you earn 10 coins.
                                     </AlertDescription>
                                 </Alert>
                             )}
@@ -259,16 +190,14 @@ const Signup = () => {
 
                                 {/* Role Selection */}
                                 <div className="space-y-4">
-                                    <Label className="text-base font-medium">Select Your Role</Label>
-                                    <RadioGroup value={formData.role} onValueChange={handleRoleChange}>
+                                    <Label className="text-base font-medium text-gray-900 dark:text-white">
+                                        Select Your Role
+                                    </Label>
+                                    <RadioGroup value={formData.role} onValueChange={(v) => setFormData(prev => ({ ...prev, role: v }))}>
                                         <div className="grid gap-4">
                                             {roles.map((role) => (
                                                 <div key={role.id} className="relative">
-                                                    <RadioGroupItem
-                                                        value={role.id}
-                                                        id={role.id}
-                                                        className="peer sr-only"
-                                                    />
+                                                    <RadioGroupItem value={role.id} id={role.id} className="peer sr-only" />
                                                     <Label
                                                         htmlFor={role.id}
                                                         className="flex flex-col space-y-3 rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
@@ -276,14 +205,15 @@ const Signup = () => {
                                                         <div className="flex items-center space-x-3">
                                                             <div className="text-primary">{role.icon}</div>
                                                             <div className="flex-1">
-                                                                <div className="font-medium">{role.title}</div>
+                                                                {/* FIXED: explicit font colors */}
+                                                                <div className="font-medium text-foreground">{role.title}</div>
                                                                 <div className="text-sm text-muted-foreground">{role.description}</div>
                                                             </div>
                                                         </div>
                                                         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                                                            {role.features.map((feature, index) => (
-                                                                <div key={index} className="flex items-center space-x-1">
-                                                                    <CheckCircle className="h-3 w-3 text-green-500" />
+                                                            {role.features.map((feature, i) => (
+                                                                <div key={i} className="flex items-center space-x-1">
+                                                                    <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
                                                                     <span>{feature}</span>
                                                                 </div>
                                                             ))}
@@ -295,203 +225,117 @@ const Signup = () => {
                                     </RadioGroup>
                                 </div>
 
-                                {/* Personal Information */}
+                                {/* Name Fields */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="firstName">First Name</Label>
-                                        <Input
-                                            id="firstName"
-                                            name="firstName"
-                                            placeholder="John"
-                                            value={formData.firstName}
-                                            onChange={handleInputChange}
-                                            required
-                                            className="h-11"
-                                        />
+                                        <Label htmlFor="firstName" className="text-gray-700 dark:text-gray-300">First Name</Label>
+                                        <Input id="firstName" name="firstName" placeholder="John"
+                                            value={formData.firstName} onChange={handleInputChange} required className="h-11" />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="lastName">Last Name</Label>
-                                        <Input
-                                            id="lastName"
-                                            name="lastName"
-                                            placeholder="Doe"
-                                            value={formData.lastName}
-                                            onChange={handleInputChange}
-                                            required
-                                            className="h-11"
-                                        />
+                                        <Label htmlFor="lastName" className="text-gray-700 dark:text-gray-300">Last Name</Label>
+                                        <Input id="lastName" name="lastName" placeholder="Doe"
+                                            value={formData.lastName} onChange={handleInputChange} required className="h-11" />
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="email">Email Address</Label>
-                                    <Input
-                                        id="email"
-                                        name="email"
-                                        type="email"
-                                        placeholder="your.email@example.com"
-                                        value={formData.email}
-                                        onChange={handleInputChange}
-                                        required
-                                        className="h-11"
-                                    />
+                                    <Label htmlFor="email" className="text-gray-700 dark:text-gray-300">Email Address</Label>
+                                    <Input id="email" name="email" type="email" placeholder="your.email@example.com"
+                                        value={formData.email} onChange={handleInputChange} required className="h-11" />
                                 </div>
 
-                                {/* Municipal Employee Additional Fields */}
+                                {/* Employee Fields */}
                                 {formData.role === "municipal-employee" && (
                                     <>
                                         <div className="space-y-2">
-                                            <Label htmlFor="employeeId">Employee ID</Label>
-                                            <Input
-                                                id="employeeId"
-                                                name="employeeId"
-                                                placeholder="EMP001"
-                                                value={formData.employeeId}
-                                                onChange={handleInputChange}
-                                                required
-                                                className="h-11"
-                                            />
+                                            <Label htmlFor="employeeId" className="text-gray-700 dark:text-gray-300">Employee ID</Label>
+                                            <Input id="employeeId" name="employeeId" placeholder="EMP001"
+                                                value={formData.employeeId} onChange={handleInputChange} required className="h-11" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="department">Department</Label>
-                                            <Input
-                                                id="department"
-                                                name="department"
-                                                placeholder="Waste Management"
-                                                value={formData.department}
-                                                onChange={handleInputChange}
-                                                className="h-11"
-                                            />
+                                            <Label htmlFor="department" className="text-gray-700 dark:text-gray-300">Department</Label>
+                                            <Input id="department" name="department" placeholder="Waste Management"
+                                                value={formData.department} onChange={handleInputChange} className="h-11" />
                                         </div>
                                     </>
                                 )}
 
-                                {/* Password Fields */}
+                                {/* Password */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="password">Password</Label>
+                                    <Label htmlFor="password" className="text-gray-700 dark:text-gray-300">Password</Label>
                                     <div className="relative">
-                                        <Input
-                                            id="password"
-                                            name="password"
+                                        <Input id="password" name="password"
                                             type={showPassword ? "text" : "password"}
                                             placeholder="Create a strong password"
-                                            value={formData.password}
-                                            onChange={handleInputChange}
-                                            required
-                                            className="h-11 pr-10"
-                                        />
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="absolute right-0 top-0 h-11 px-3 py-2 hover:bg-transparent"
-                                            onClick={() => setShowPassword(!showPassword)}
-                                        >
-                                            {showPassword ? (
-                                                <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                            ) : (
-                                                <Eye className="h-4 w-4 text-muted-foreground" />
-                                            )}
+                                            value={formData.password} onChange={handleInputChange} required className="h-11 pr-10" />
+                                        <Button type="button" variant="ghost" size="sm"
+                                            className="absolute right-0 top-0 h-11 px-3 hover:bg-transparent"
+                                            onClick={() => setShowPassword(!showPassword)}>
+                                            {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                                         </Button>
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Password must be at least 8 characters long
-                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Minimum 8 characters</p>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                                    <Label htmlFor="confirmPassword" className="text-gray-700 dark:text-gray-300">Confirm Password</Label>
                                     <div className="relative">
-                                        <Input
-                                            id="confirmPassword"
-                                            name="confirmPassword"
+                                        <Input id="confirmPassword" name="confirmPassword"
                                             type={showConfirmPassword ? "text" : "password"}
                                             placeholder="Confirm your password"
-                                            value={formData.confirmPassword}
-                                            onChange={handleInputChange}
-                                            required
-                                            className="h-11 pr-10"
-                                        />
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="absolute right-0 top-0 h-11 px-3 py-2 hover:bg-transparent"
-                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        >
-                                            {showConfirmPassword ? (
-                                                <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                            ) : (
-                                                <Eye className="h-4 w-4 text-muted-foreground" />
-                                            )}
+                                            value={formData.confirmPassword} onChange={handleInputChange} required className="h-11 pr-10" />
+                                        <Button type="button" variant="ghost" size="sm"
+                                            className="absolute right-0 top-0 h-11 px-3 hover:bg-transparent"
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                                            {showConfirmPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                                         </Button>
                                     </div>
                                 </div>
 
-                                {/* Referral Code Field */}
+                                {/* Referral Code */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="referralCode" className="flex items-center gap-2">
-                                        <Gift className="h-4 w-4 text-primary" />
-                                        Referral Code (Optional)
+                                    <Label htmlFor="referralCode" className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                                        <Gift className="h-4 w-4 text-primary" /> Referral Code (Optional)
                                     </Label>
-                                    <Input
-                                        id="referralCode"
-                                        name="referralCode"
-                                        placeholder="Enter referral code"
-                                        value={formData.referralCode}
-                                        onChange={handleInputChange}
-                                        className="h-11"
-                                    />
+                                    <Input id="referralCode" name="referralCode" placeholder="Enter referral code"
+                                        value={formData.referralCode} onChange={handleInputChange} className="h-11" />
                                     {referralValidation.message && (
-                                        <p className={`text-xs ${referralValidation.isValid
-                                            ? 'text-green-600'
-                                            : 'text-red-600'
-                                            }`}>
+                                        <p className={`text-xs ${referralValidation.isValid ? 'text-green-600' : 'text-red-500'}`}>
                                             {referralValidation.message}
                                         </p>
                                     )}
                                 </div>
 
-                                {/* Terms and Conditions */}
-                                <div className="flex items-center space-x-2">
+                                {/* Terms */}
+                                <div className="flex items-start space-x-2">
                                     <Checkbox
                                         id="agreeToTerms"
                                         checked={formData.agreeToTerms}
-                                        onCheckedChange={(checked) =>
-                                            setFormData(prev => ({ ...prev, agreeToTerms: checked as boolean }))
-                                        }
+                                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, agreeToTerms: checked as boolean }))}
+                                        className="mt-0.5"
                                     />
-                                    <Label htmlFor="agreeToTerms" className="text-sm">
+                                    <Label htmlFor="agreeToTerms" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                                         I agree to the Terms of Service and Privacy Policy
                                     </Label>
                                 </div>
 
-                                <Button
-                                    type="submit"
-                                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
-                                    disabled={isLoading}
-                                >
+                                <Button type="submit" className="w-full h-11 font-medium" disabled={isLoading}>
                                     {isLoading ? "Creating Account..." : "Create Account"}
                                 </Button>
 
                                 <div className="relative">
                                     <div className="absolute inset-0 flex items-center">
-                                        <span className="w-full border-t" />
+                                        <span className="w-full border-t border-gray-200 dark:border-gray-700" />
                                     </div>
                                     <div className="relative flex justify-center text-xs uppercase">
-                                        <span className="bg-background px-2 text-muted-foreground">
-                                            Or continue with
-                                        </span>
+                                        <span className="bg-white dark:bg-gray-900 px-2 text-gray-400">Or continue with</span>
                                     </div>
                                 </div>
 
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full h-11"
-                                    onClick={handleGoogleSignUp}
-                                    disabled={isLoading}
-                                >
+                                <Button type="button" variant="outline"
+                                    className="w-full h-11 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300"
+                                    onClick={handleGoogleSignUp} disabled={isLoading}>
                                     <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                                         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                                         <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
@@ -503,11 +347,8 @@ const Signup = () => {
                             </form>
 
                             <div className="mt-6 text-center text-sm">
-                                <span className="text-muted-foreground">Already have an account? </span>
-                                <Link
-                                    to="/login"
-                                    className="text-primary hover:text-primary/80 font-medium transition-colors"
-                                >
+                                <span className="text-gray-500 dark:text-gray-400">Already have an account? </span>
+                                <Link to="/login" className="text-primary hover:text-primary/80 font-medium transition-colors">
                                     Sign in here
                                 </Link>
                             </div>
