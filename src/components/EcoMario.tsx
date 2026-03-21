@@ -143,64 +143,42 @@ const BrickBlock = () => (
   </div>
 );
 
-// ✅ Touch D-Pad component
 const TouchControls = ({
-  onLeftStart, onLeftEnd,
-  onRightStart, onRightEnd,
-  onJump,
+  onLeftStart, onLeftEnd, onRightStart, onRightEnd, onJump,
 }: {
   onLeftStart: () => void; onLeftEnd: () => void;
   onRightStart: () => void; onRightEnd: () => void;
   onJump: () => void;
 }) => {
   const btnStyle: React.CSSProperties = {
-    width: 60, height: 60,
-    borderRadius: 12,
+    width: 60, height: 60, borderRadius: 12,
     background: 'rgba(255,255,255,0.25)',
     border: '2px solid rgba(255,255,255,0.5)',
-    color: 'white',
-    fontSize: 24,
+    color: 'white', fontSize: 24,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    userSelect: 'none',
-    WebkitUserSelect: 'none',
-    touchAction: 'none',
-    cursor: 'pointer',
+    userSelect: 'none', WebkitUserSelect: 'none',
+    touchAction: 'none', cursor: 'pointer',
   };
-
   return (
     <div style={{
       position: 'absolute', bottom: 12, left: 0, right: 0,
       display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-      padding: '0 16px', zIndex: 30,
-      pointerEvents: 'none',
+      padding: '0 16px', zIndex: 30, pointerEvents: 'none',
     }}>
-      {/* Left / Right */}
       <div style={{ display: 'flex', gap: 8, pointerEvents: 'all' }}>
-        <div
-          style={btnStyle}
+        <div style={btnStyle}
           onTouchStart={(e) => { e.preventDefault(); onLeftStart(); }}
           onTouchEnd={(e) => { e.preventDefault(); onLeftEnd(); }}
-          onMouseDown={onLeftStart}
-          onMouseUp={onLeftEnd}
-          onMouseLeave={onLeftEnd}
-        >◀</div>
-        <div
-          style={btnStyle}
+          onMouseDown={onLeftStart} onMouseUp={onLeftEnd} onMouseLeave={onLeftEnd}>◀</div>
+        <div style={btnStyle}
           onTouchStart={(e) => { e.preventDefault(); onRightStart(); }}
           onTouchEnd={(e) => { e.preventDefault(); onRightEnd(); }}
-          onMouseDown={onRightStart}
-          onMouseUp={onRightEnd}
-          onMouseLeave={onRightEnd}
-        >▶</div>
+          onMouseDown={onRightStart} onMouseUp={onRightEnd} onMouseLeave={onRightEnd}>▶</div>
       </div>
-
-      {/* Jump */}
       <div style={{ pointerEvents: 'all' }}>
-        <div
-          style={{ ...btnStyle, width: 70, height: 70, borderRadius: 35, background: 'rgba(34,197,94,0.6)', border: '2px solid rgba(34,197,94,0.9)', fontSize: 28 }}
+        <div style={{ ...btnStyle, width: 70, height: 70, borderRadius: 35, background: 'rgba(34,197,94,0.6)', border: '2px solid rgba(34,197,94,0.9)', fontSize: 28 }}
           onTouchStart={(e) => { e.preventDefault(); onJump(); }}
-          onMouseDown={onJump}
-        >⬆</div>
+          onMouseDown={onJump}>⬆</div>
       </div>
     </div>
   );
@@ -208,28 +186,45 @@ const TouchControls = ({
 
 // --- MAIN GAME ---
 export default function EcoMario() {
-  const [gameState, setGameState] = useState<GameState>('start');
-  const [score, setScore] = useState(0);
+  const [gameState, setGameState]           = useState<GameState>('start');
+  const [score, setScore]                   = useState(0);
   const [playerPosition, setPlayerPosition] = useState<Vector2D>({ x: 100, y: 400 });
   const [playerVelocity, setPlayerVelocity] = useState<Vector2D>({ x: 0, y: 0 });
-  const [isJumping, setIsJumping] = useState(false);
-  const [direction, setDirection] = useState<'left' | 'right'>('right');
-  const [cameraX, setCameraX] = useState(0);
-  const [items, setItems] = useState<ItemObject[]>([]);
-  const [enemies, setEnemies] = useState<EnemyObject[]>([]);
-  const [hazards, setHazards] = useState<HazardObject[]>([]);
-  const [platforms, setPlatforms] = useState<Platform[]>([]);
-  const [clouds, setClouds] = useState<CloudObject[]>([]);
+  const [isJumping, setIsJumping]           = useState(false);
+  const [direction, setDirection]           = useState<'left' | 'right'>('right');
+  const [cameraX, setCameraX]               = useState(0);
+  const [items, setItems]                   = useState<ItemObject[]>([]);
+  const [enemies, setEnemies]               = useState<EnemyObject[]>([]);
+  const [hazards, setHazards]               = useState<HazardObject[]>([]);
+  const [platforms, setPlatforms]           = useState<Platform[]>([]);
+  const [clouds, setClouds]                 = useState<CloudObject[]>([]);
 
-  const keys = useRef<{ [key: string]: boolean }>({}).current;
-  const generatedUntilX = useRef(0);
-  const gameFrame = useRef(0);
+  // ✅ FIX 1: use keysRef.current everywhere — never .current extracted once
+  const keysRef          = useRef<{ [key: string]: boolean }>({});
+  const generatedUntilX  = useRef(0);
+  const gameFrame        = useRef(0);
   const animationFrameId = useRef<number>();
-  const gameContainerRef = useRef<HTMLDivElement>(null);
+
+  // ✅ FIX 2: scale tracked in state, canvas uses overflow:hidden + transform from center
+  const [scale, setScale] = useState(1);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (!wrapperRef.current) return;
+      const parentW = wrapperRef.current.parentElement?.clientWidth ?? window.innerWidth;
+      // Use full available width, leave 32px padding, cap at 1
+      const s = Math.min(1, (parentW - 16) / SCREEN_WIDTH);
+      setScale(s);
+    };
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, []);
 
   const generateChunk = useCallback((startX: number) => {
     const newPlatforms: Platform[] = [];
-    const newItems: ItemObject[] = [];
+    const newItems: ItemObject[]   = [];
     const newEnemies: EnemyObject[] = [];
     const newHazards: HazardObject[] = [];
     let lastPlatformY = SCREEN_HEIGHT - TILE_SIZE * 2;
@@ -276,7 +271,7 @@ export default function EcoMario() {
             newItems.push({ id: Math.random(), position: { x: objectX, y: objectY }, size: { x: TILE_SIZE, y: TILE_SIZE }, type: 'biodegradable', name });
           } else if (rand < 0.85) {
             const t = Math.random();
-            let name: 'bottle' | 'can' | 'plasticbag' = t < 0.45 ? 'bottle' : t < 0.9 ? 'can' : 'plasticbag';
+            const name: 'bottle' | 'can' | 'plasticbag' = t < 0.45 ? 'bottle' : t < 0.9 ? 'can' : 'plasticbag';
             newEnemies.push({ id: Math.random(), position: { x: objectX, y: objectY }, size: { x: TILE_SIZE, y: TILE_SIZE }, type: 'non-biodegradable', name, velocity: { x: name === 'plasticbag' ? 0 : -BASE_ENEMY_SPEED, y: 0 } });
           } else {
             newHazards.push({ id: Math.random(), position: { x: objectX, y: platformY - TILE_SIZE / 2 }, size: { x: TILE_SIZE, y: TILE_SIZE / 2 }, type: 'hazard', name: 'glass' });
@@ -294,23 +289,28 @@ export default function EcoMario() {
     generatedUntilX.current = endX;
   }, []);
 
-  const cleanupDistantObjects = useCallback(() => {
-    const cleanupLimit = cameraX - SCREEN_WIDTH;
+  const cleanupDistantObjects = useCallback((camX: number) => {
+    const cleanupLimit = camX - SCREEN_WIDTH;
     if (gameFrame.current % 120 === 0) {
       setPlatforms(prev => prev.filter(p => p.position.x > cleanupLimit));
       setItems(prev => prev.filter(i => i.position.x > cleanupLimit));
       setEnemies(prev => prev.filter(e => e.position.x > cleanupLimit));
       setHazards(prev => prev.filter(h => h.position.x > cleanupLimit));
     }
-  }, [cameraX]);
+  }, []);
 
+  // ✅ FIX 1: wipe ALL key states on every restart
   const resetGame = useCallback(() => {
+    keysRef.current = {};
     setPlayerPosition({ x: 100, y: 400 });
     setPlayerVelocity({ x: 0, y: 0 });
+    setIsJumping(false);
+    setDirection('right');
     setScore(0);
     setPlatforms([]); setItems([]); setEnemies([]); setHazards([]);
     setCameraX(0);
     generatedUntilX.current = 0;
+    gameFrame.current = 0;
     const initialClouds: CloudObject[] = [];
     for (let i = 0; i < 5; i++) {
       initialClouds.push({ id: i, position: { x: Math.random() * SCREEN_WIDTH, y: Math.random() * (SCREEN_HEIGHT / 3) }, size: { x: (Math.random() * 50) + 60, y: (Math.random() * 25) + 30 }, speed: (Math.random() * 0.2) + 0.1 });
@@ -324,30 +324,19 @@ export default function EcoMario() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'ArrowUp' || e.code === 'Space') e.preventDefault();
-      keys[e.code] = true;
+      keysRef.current[e.code] = true;
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'ArrowUp' || e.code === 'Space') e.preventDefault();
-      keys[e.code] = false;
+      keysRef.current[e.code] = false;
     };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-    return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [keys]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (gameContainerRef.current) {
-        const parent = gameContainerRef.current.parentElement;
-        if (parent) {
-          const scale = Math.min(1, parent.clientWidth / SCREEN_WIDTH);
-          gameContainerRef.current.style.transform = `scale(${scale})`;
-        }
-      }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      keysRef.current = {};
     };
-    window.addEventListener('resize', handleResize);
-    handleResize();
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const gameLoop = useCallback(() => {
@@ -355,7 +344,7 @@ export default function EcoMario() {
     gameFrame.current++;
 
     if (playerPosition.x > generatedUntilX.current - LEVEL_CHUNK_WIDTH) generateChunk(generatedUntilX.current);
-    cleanupDistantObjects();
+    cleanupDistantObjects(cameraX);
 
     setClouds(prevClouds => prevClouds.map(cloud => {
       let newX = cloud.position.x - cloud.speed;
@@ -365,11 +354,12 @@ export default function EcoMario() {
 
     let pos = { ...playerPosition };
     let vel = { ...playerVelocity };
+    const keys = keysRef.current;
     const currentPlayerSpeed = BASE_PLAYER_SPEED + Math.floor(score / 50) * 0.5;
 
     vel.x = 0;
-    if (keys['ArrowLeft']) { vel.x = -currentPlayerSpeed; setDirection('left'); }
-    if (keys['ArrowRight']) { vel.x = currentPlayerSpeed; setDirection('right'); }
+    if (keys['ArrowLeft'])  { vel.x = -currentPlayerSpeed; setDirection('left'); }
+    if (keys['ArrowRight']) { vel.x = currentPlayerSpeed;  setDirection('right'); }
     pos.x += vel.x;
     pos.x = Math.max(0, pos.x);
 
@@ -457,7 +447,7 @@ export default function EcoMario() {
     const targetCameraX = pos.x - SCREEN_WIDTH / 4;
     setCameraX(prevCamX => prevCamX + (targetCameraX - prevCamX) * 0.1);
     animationFrameId.current = requestAnimationFrame(gameLoop);
-  }, [gameState, playerPosition, playerVelocity, platforms, hazards, score, generateChunk, cleanupDistantObjects, isJumping]);
+  }, [gameState, playerPosition, playerVelocity, platforms, hazards, score, generateChunk, cleanupDistantObjects, isJumping, cameraX]);
 
   useEffect(() => {
     if (gameState === 'playing') { animationFrameId.current = requestAnimationFrame(gameLoop); }
@@ -465,47 +455,67 @@ export default function EcoMario() {
     return () => { if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current); };
   }, [gameState, gameLoop]);
 
-  const renderItem = (obj: ItemObject) => {
-    const C = obj.name === 'apple' ? Apple : obj.name === 'banana' ? Banana : PaperBall;
-    return <div key={obj.id} className="absolute" style={{ left: obj.position.x, top: obj.position.y }}><C /></div>;
-  };
-  const renderEnemy = (obj: EnemyObject) => {
-    const C = obj.name === 'bottle' ? PlasticBottle : obj.name === 'can' ? SodaCan : PlasticBag;
-    return <div key={obj.id} className="absolute" style={{ left: obj.position.x, top: obj.position.y }}><C /></div>;
-  };
-  const renderHazard = (obj: HazardObject) => (
-    <div key={obj.id} className="absolute" style={{ left: obj.position.x, top: obj.position.y }}><BrokenGlass /></div>
-  );
+  const renderItem     = (obj: ItemObject)   => { const C = obj.name === 'apple' ? Apple : obj.name === 'banana' ? Banana : PaperBall; return <div key={obj.id} className="absolute" style={{ left: obj.position.x, top: obj.position.y }}><C /></div>; };
+  const renderEnemy    = (obj: EnemyObject)  => { const C = obj.name === 'bottle' ? PlasticBottle : obj.name === 'can' ? SodaCan : PlasticBag; return <div key={obj.id} className="absolute" style={{ left: obj.position.x, top: obj.position.y }}><C /></div>; };
+  const renderHazard   = (obj: HazardObject) => <div key={obj.id} className="absolute" style={{ left: obj.position.x, top: obj.position.y }}><BrokenGlass /></div>;
   const renderPlatform = (p: Platform) => {
     let PC;
-    if (p.type === 'G') PC = <div style={{ width: TILE_SIZE, height: TILE_SIZE, background: '#16A34A', borderBottom: '4px solid #14532D', borderRight: '2px solid #14532D' }} />;
+    if (p.type === 'G')      PC = <div style={{ width: TILE_SIZE, height: TILE_SIZE, background: '#16A34A', borderBottom: '4px solid #14532D', borderRight: '2px solid #14532D' }} />;
     else if (p.type === 'D') PC = <div style={{ width: TILE_SIZE, height: TILE_SIZE, background: '#A16207' }} />;
     else if (p.type === 'B') PC = <BrickBlock />;
-    else PC = <div style={{ width: TILE_SIZE, height: TILE_SIZE, background: '#475569', border: '2px solid #1E293B' }} />;
+    else                     PC = <div style={{ width: TILE_SIZE, height: TILE_SIZE, background: '#475569', border: '2px solid #1E293B' }} />;
     return <div key={p.id} className="absolute" style={{ left: p.position.x, top: p.position.y }}>{PC}</div>;
   };
 
   const visiblePlatforms = useMemo(() => platforms.filter(p => p.position.x > cameraX - TILE_SIZE && p.position.x < cameraX + SCREEN_WIDTH + TILE_SIZE), [platforms, cameraX]);
-  const visibleItems = useMemo(() => items.filter(i => i.position.x > cameraX - TILE_SIZE && i.position.x < cameraX + SCREEN_WIDTH + TILE_SIZE), [items, cameraX]);
-  const visibleEnemies = useMemo(() => enemies.filter(e => e.position.x > cameraX - TILE_SIZE && e.position.x < cameraX + SCREEN_WIDTH + TILE_SIZE), [enemies, cameraX]);
-  const visibleHazards = useMemo(() => hazards.filter(h => h.position.x > cameraX - TILE_SIZE && h.position.x < cameraX + SCREEN_WIDTH + TILE_SIZE), [hazards, cameraX]);
+  const visibleItems     = useMemo(() => items.filter(i => i.position.x > cameraX - TILE_SIZE && i.position.x < cameraX + SCREEN_WIDTH + TILE_SIZE), [items, cameraX]);
+  const visibleEnemies   = useMemo(() => enemies.filter(e => e.position.x > cameraX - TILE_SIZE && e.position.x < cameraX + SCREEN_WIDTH + TILE_SIZE), [enemies, cameraX]);
+  const visibleHazards   = useMemo(() => hazards.filter(h => h.position.x > cameraX - TILE_SIZE && h.position.x < cameraX + SCREEN_WIDTH + TILE_SIZE), [hazards, cameraX]);
+
+  // ✅ FIX 2: scaled canvas height so wrapper collapses correctly with no overflow
+  const scaledW = SCREEN_WIDTH  * scale;
+  const scaledH = SCREEN_HEIGHT * scale;
 
   return (
-    <div className="w-full min-h-screen p-2 sm:p-4 flex flex-col items-center justify-center bg-[#38B6FF] font-mono select-none">
-      <h1 className="text-2xl sm:text-4xl font-bold text-white mb-2 md:mb-4" style={{ fontFamily: '"Press Start 2P", cursive' }}>Eco Hero</h1>
+    <div className="w-full min-h-screen flex flex-col items-center justify-start bg-[#38B6FF] font-mono select-none pt-3 pb-4 px-2">
+      <h1 className="text-xl sm:text-3xl font-bold text-white mb-2 text-center"
+        style={{ fontFamily: '"Press Start 2P", cursive' }}>
+        Eco Hero
+      </h1>
 
-      <div className="w-full max-w-[800px] flex justify-center">
+      {/* ✅ Outer wrapper exactly matches scaled canvas size — no overflow, no dead space */}
+      <div
+        ref={wrapperRef}
+        style={{
+          width:    scaledW,
+          height:   scaledH,
+          position: 'relative',
+          overflow: 'hidden',   // clip anything that bleeds out
+          borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+          flexShrink: 0,
+        }}
+      >
+        {/* ✅ Canvas scaled from top-left, wrapper clips it to exact size */}
         <div
-          ref={gameContainerRef}
-          style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, transformOrigin: 'top center' }}
-          className="relative overflow-hidden bg-[#7dd3fc] rounded-lg shadow-2xl"
+          style={{
+            width:           SCREEN_WIDTH,
+            height:          SCREEN_HEIGHT,
+            transformOrigin: 'top left',
+            transform:       `scale(${scale})`,
+            position:        'absolute',
+            top: 0, left: 0,
+          }}
+          className="bg-[#7dd3fc]"
         >
           {/* Start screen */}
           {gameState === 'start' && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black bg-opacity-50 text-white gap-4">
-              <h2 className="text-4xl md:text-5xl" style={{ fontFamily: '"Press Start 2P", cursive' }}>Ready?</h2>
-              <p className="text-sm md:text-base text-green-300 text-center px-8">Collect fruit • Stomp on trash • Avoid glass</p>
-              <button onClick={resetGame} className="px-8 py-4 text-xl bg-green-500 rounded-lg shadow-lg hover:bg-green-600 transition-transform transform hover:scale-105" style={{ fontFamily: '"Press Start 2P", cursive' }}>
+              <h2 style={{ fontFamily: '"Press Start 2P", cursive', fontSize: 36 }}>Ready?</h2>
+              <p className="text-sm text-green-300 text-center px-8">Collect fruit • Stomp on trash • Avoid glass</p>
+              <button onClick={resetGame}
+                style={{ fontFamily: '"Press Start 2P", cursive', fontSize: 18 }}
+                className="px-8 py-4 bg-green-500 rounded-lg shadow-lg hover:bg-green-600">
                 Start Game
               </button>
             </div>
@@ -514,9 +524,11 @@ export default function EcoMario() {
           {/* Game Over screen */}
           {gameState === 'gameOver' && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black bg-opacity-50 text-white gap-4">
-              <h2 className="text-4xl md:text-5xl text-red-500" style={{ fontFamily: '"Press Start 2P", cursive' }}>Game Over</h2>
-              <p className="text-xl md:text-2xl" style={{ fontFamily: '"Press Start 2P", cursive' }}>Score: {score}</p>
-              <button onClick={resetGame} className="px-8 py-4 text-xl bg-blue-500 rounded-lg shadow-lg hover:bg-blue-600 transition-transform transform hover:scale-105" style={{ fontFamily: '"Press Start 2P", cursive' }}>
+              <h2 style={{ fontFamily: '"Press Start 2P", cursive', fontSize: 36, color: '#f87171' }}>Game Over</h2>
+              <p style={{ fontFamily: '"Press Start 2P", cursive', fontSize: 20 }}>Score: {score}</p>
+              <button onClick={resetGame}
+                style={{ fontFamily: '"Press Start 2P", cursive', fontSize: 18 }}
+                className="px-8 py-4 bg-blue-500 rounded-lg shadow-lg hover:bg-blue-600">
                 Try Again
               </button>
             </div>
@@ -543,24 +555,24 @@ export default function EcoMario() {
             {visiblePlatforms.map(renderPlatform)}
           </div>
 
-          {/* ✅ Touch D-Pad — only shown when playing */}
+          {/* Touch controls */}
           {gameState === 'playing' && (
             <TouchControls
-              onLeftStart={() => { keys['ArrowLeft'] = true; }}
-              onLeftEnd={() => { keys['ArrowLeft'] = false; }}
-              onRightStart={() => { keys['ArrowRight'] = true; }}
-              onRightEnd={() => { keys['ArrowRight'] = false; }}
-              onJump={() => { keys['ArrowUp'] = true; setTimeout(() => { keys['ArrowUp'] = false; }, 150); }}
+              onLeftStart={()  => { keysRef.current['ArrowLeft']  = true;  }}
+              onLeftEnd={()    => { keysRef.current['ArrowLeft']  = false; }}
+              onRightStart={() => { keysRef.current['ArrowRight'] = true;  }}
+              onRightEnd={()   => { keysRef.current['ArrowRight'] = false; }}
+              onJump={()       => { keysRef.current['ArrowUp'] = true; setTimeout(() => { keysRef.current['ArrowUp'] = false; }, 150); }}
             />
           )}
         </div>
       </div>
 
       {/* Controls legend */}
-      <div className="text-white mt-3 text-center text-xs md:text-sm space-y-1">
-        <p>📱 <strong>Mobile:</strong> Use the ◀ ▶ buttons to move and ⬆ to jump</p>
-        <p>⌨️ <strong>Desktop:</strong> Arrow keys to move, Arrow Up or Space to jump</p>
-        <p>🍎 Collect fruit (+10) • 👟 Stomp trash (+20) • 🔪 Avoid broken glass!</p>
+      <div className="text-white mt-3 text-center space-y-1 px-4" style={{ fontSize: Math.max(10, 13 * scale) }}>
+        <p>📱 <strong>Mobile:</strong> Use ◀ ▶ to move and ⬆ to jump</p>
+        <p>⌨️ <strong>Desktop:</strong> Arrow keys / Space to jump</p>
+        <p>🍎 Collect fruit (+10) • 👟 Stomp trash (+20) • 🔪 Avoid glass!</p>
       </div>
     </div>
   );
